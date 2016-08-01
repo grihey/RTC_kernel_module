@@ -26,10 +26,6 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Grigoriy Romanov");
 
-static int    majorNumber = 2150;
-static struct class* rtcClass = NULL;
-static struct device* rtcDevice = NULL;
-
 static long   epoch_time_sec = 0;
 static int    epoch_time_usec = 0;
 static int    speed = 100;
@@ -59,32 +55,6 @@ static int rtc_romanov_init(void)
   task = kthread_run(main_thread, &tv, "main loop");
   wake_up_process(task);
 
-  /*Try to dinamically allocated major number
-  majorNumber = register_chrdev(0, DEVICE_NAME, &fops);
-  if(majorNumber < 0){
-    printk(KERN_ALERT "RTC_Romanov failed to register a major number\n");
-    return majorNumber;
-  }
-  printk(KERN_ALERT "RTC_Romanov registered with major number %d\n",
-      majorNumber);
- 
-  rtcClass = class_create(THIS_MODULE, CLASS_NAME);
-  if(IS_ERR(rtcClass)){
-    unregister_chrdev(majorNumber, DEVICE_NAME);
-    printk(KERN_ALERT "Failed to register device class. \n");
-    return PTR_ERR(rtcClass);
-  }
-  printk(KERN_ALERT "RTC_Romanov device class registered. \n");
-
-  rtcDevice = device_create(rtcClass, NULL, MKDEV(majorNumber,0), NULL, DEVICE_NAME);
-  if(IS_ERR(rtcDevice)){
-    class_destroy(rtcClass);
-    unregister_chrdev(majorNumber, DEVICE_NAME);
-    printk(KERN_ALERT "Failed to create the device. \n");
-    return PTR_ERR(rtcDevice);
-  }
-  */
-
   printk(KERN_ALERT "RTC_Romanov module have been istalled. \n");
 
   return 0;
@@ -92,11 +62,6 @@ static int rtc_romanov_init(void)
 
 void rtc_romanov_exit(void)
 {
-  device_destroy(rtcClass, MKDEV(majorNumber, 0));
-  class_unregister(rtcClass);
-  class_destroy(rtcClass);
-  unregister_chrdev(majorNumber, DEVICE_NAME);
-
   kthread_stop(task);
   printk(KERN_ALERT "RTC_Romanov module was removed.\n");
 }

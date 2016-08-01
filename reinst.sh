@@ -1,4 +1,3 @@
 #!/bin/bash
-rmmod -f module.ko
-insmod module.ko
-dmesg | tail -n 10
+rmmod -f rtc_romanov.ko
+insmod rtc_romanov.ko
