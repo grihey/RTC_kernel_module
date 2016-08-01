@@ -1,0 +1,26 @@
+REVIEW
+This is a demo kernel module which demontrates my skills  in creating KLM.
+Module intented to emulating rtc device. Time represent in epoch unix
+seconds.
+
+Parameters of module is:
+@param epoch_time_sec - unix seconds, initializing when module loaded by
+                        current kernel time.
+@param epoch_time_usec- useconds from timeval struct.
+@param speed          - speed of time flow in module. Values of speed begins 
+                        at 100, it means 100 - normal flow, like system 
+                        clock, if speed greater - time flow in that module
+                        accelerated, if lesser slowing down.
+@param random         - if non-zero, current time ascending by increment
+                        makes from @random-bound param, interprets like  
+                        range of possible values of speed.
+@param random-bound   - range of possible values of speed in random time mode
+
+All parameter allows to read and write from sysfs to everyone.
+(/sys/modules/rtc_romanov/parameters/{param-name})
+
+Module could be inserted and removed from kernel space dinamically. 
+
+TODO: * add device in /dev/ directory with standart interface.
+      * add statistic file in /proc (What is statistic, uptime? whatelse?)
+      * create testing shell scritp for module with behaviour setup.
