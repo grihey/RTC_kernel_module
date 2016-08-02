@@ -16,11 +16,23 @@ Parameters of module is:
                         range of possible values of speed.
 @param random-bound   - range of possible values of speed in random time mode
 
-All parameter allows to read and write from sysfs to everyone.
-(/sys/modules/rtc_romanov/parameters/{param-name})
-
 Module could be inserted and removed from kernel space dinamically. 
+Module registers in file /dev/rtc38 and when you read it secs, usecs of module
+time flow outputed.
+Module have interface with userspace in /proc/rtcmodule. You may passing
+parameters by string commands:
+"s [value]" - sets speed to value; value must be non-negative
+"r [value]" - sets random mode if value is non-zero, disable random mode
+              otherwise.
+"b [value]" - sets range distribution of speed for random mode.
+"t [value]" - sets epoch time secs in module.
+"u [value]" - sets epoch time usecs in module.
 
-TODO: * add device in /dev/ directory with standart interface.
-      * add statistic file in /proc (What is statistic, uptime? whatelse?)
-      * create testing shell scritp for module with behaviour setup.
+Or reading from that file. outputed:
+  Module uptime.
+  Difference between sys clock. Negative means rtc module time ahead sys time.
+  Speed.
+  Random. 1 means on, 0 off.
+  Random bound.
+  Secs.
+  Usecs.
