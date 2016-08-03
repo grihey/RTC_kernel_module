@@ -20,6 +20,10 @@
 #define procfs_name "helloworld"
 
 #define MIL 1000000L
+
+ /*  Factor which determines what value of speed means 1x.
+  *  Defines in sources only.
+  */
 #define S_FACTOR 100
 #define S_QUOT (MIL / S_FACTOR)
 #define S_REMAINDER (MIL % S_FACTOR)
@@ -138,19 +142,19 @@ void rtc_romanov_exit(void)
 
 static int main_thread(void* data)
 {
+  /*if random mode on, we compute value of speed in every iteration*/
   unsigned short rand_speed;
   while(!kthread_should_stop()){
     set_current_state(TASK_INTERRUPTIBLE);
     schedule_timeout(HZ);
     if(speed < 0){
-      printk("Speed should be non-negative number. Thread stopped.\n");
-      return -1;
+      printk("RTC Romanov: Speed should be non-negative number. Thread stopped.\n");
+      return -EINVAL;
     }
 
     if(random){
       get_random_bytes(&rand_speed, sizeof(rand_speed));
       rand_speed %= random_bound;
-
       time_sec += (S_QUOT * rand_speed +
           S_REMAINDER * rand_speed + time_usec) / MIL;
       time_usec = (S_QUOT * rand_speed + 
@@ -243,15 +247,18 @@ static ssize_t procfile_write(struct file * file,
     return -EFAULT;
   procfs_buffer[strlen(procfs_buffer)] += '\0';
 
-  if(kstrtol(&procfs_buffer[2], 10, &rett)){
-    return -EINVAL;
-  }
-
-  if(rett < 0)
-    return -EINVAL;
 
   /*srbtu [number]*/
+  /*Second char must be a whitespace*/
   if(procfs_buffer[1] == ' '){
+    /*After whitespace we have a number*/
+    if(kstrtol(&procfs_buffer[2], 10, &rett)){
+      return -EINVAL;
+    }
+    /*We dont have parameters which might be negative*/
+    if(rett < 0)
+      return -EINVAL;
+
     switch(procfs_buffer[0]){
       case 's':
         speed = rett;
