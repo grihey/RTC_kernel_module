@@ -114,7 +114,7 @@ static int rtc_romanov_init(void)
 
   if(Major < 0) {
     printk(KERN_ALERT "Registering chardevice failed with %d\n", Major); 
-    return Major;
+    goto fail_dev;
   }
   printk(KERN_INFO "RTC_Romanov: assigned major number %d.\n", Major);
 
@@ -124,11 +124,19 @@ static int rtc_romanov_init(void)
     remove_proc_entry(PROCFS_NAME, NULL);
     printk(KERN_ALERT "Error: could not initialize /proc/%s\n",
           PROCFS_NAME);
-    return -ENOMEM;
+    goto fail_proc;
   }
 
   printk(KERN_INFO "/proc/%s created\n", PROCFS_NAME);
   return SUCCESS;
+
+fail_dev:
+  rtc_romanov_exit();
+  return Major;
+fail_proc:
+  rtc_romanov_exit();
+  return -ENOMEM;
+  
 }
 
 void rtc_romanov_exit(void)

@@ -44,3 +44,8 @@ Or reading from that file. outputed:
   Random bound.
   Secs.
   Usecs.
+
+TODO: 
+  * Register device like rtc class with trc_class_ops structure.
+  * Dynamic create node in dev 
+  * Represents time in human-readable format.
