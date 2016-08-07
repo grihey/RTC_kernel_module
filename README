@@ -25,8 +25,8 @@ Parameters of module is:
                         random time mode. Low border is 0.
 
 Module could be inserted and removed from kernel space dinamically. 
-Module registers in file /dev/rtc38 and when you read it secs, usecs of module
-time flow outputed.
+Module registers in file /dev/rtcN you can interoperate with it by hwclock
+utility. 
 Module have interface with userspace in /proc/rtcmodule. You may passing
 parameters by string commands:
 "s [value]" - sets speed to value; value must be non-negative
@@ -44,8 +44,3 @@ Or reading from that file. outputed:
   Random bound.
   Secs.
   Usecs.
-
-TODO: 
-  * Register device like rtc class with trc_class_ops structure.
-  * Dynamic create node in dev 
-  * Represents time in human-readable format.

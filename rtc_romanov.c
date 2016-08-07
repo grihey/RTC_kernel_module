@@ -3,6 +3,8 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/device.h>
+#include <linux/rtc.h>
+#include <linux/platform_device.h>
 
 #include <linux/jiffies.h>
 #include <linux/time.h>
@@ -16,8 +18,6 @@
 #include <linux/kthread.h>
 #include <linux/random.h>
 
-#define DEVICE_NAME "rtc38"
-#define procfs_name "helloworld"
 
 #define MIL 1000000L
 
@@ -29,7 +29,7 @@
 #define S_REMAINDER (MIL % S_FACTOR)
 
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_AUTHOR("Grigoriy Romanov");
+MODULE_AUTHOR("Grigoriy Romanov <grihey138@gmail.com>");
 
 /*Parameter which stores unix secs*/
 static long   time_sec = 0;
@@ -53,35 +53,34 @@ static int init_time;
 static int main_thread(void* data);
 static int rtc_romanov_init(void);
 void rtc_romanov_exit(void);
+static int rtc_romanov_probe(struct platform_device *pdev);
 
-static int device_open(struct inode *, struct file *);
-static int device_release(struct inode *, struct file *);
-static ssize_t device_read(struct file *, char *, size_t, loff_t *);
-static ssize_t device_write(struct file *, const char *, size_t, loff_t *);
 static int procfile_open(struct inode *inode, struct file *file);
 static int procfile_show(struct seq_file *m, void *v);
 static ssize_t procfile_write(struct file *, const char __user *, size_t, loff_t *);
 
+static int read_rtc_time(struct device *dev, struct rtc_time *tm);
+static int set_rtc_time(struct device *dev, struct rtc_time *tm);
+
 #define SUCCESS 0
-#define DEVICE_NAME "rtc38"
+#define DEVICE_NAME "rtc_romanov"
+#define DEVICE_NAME_1 "dev_romanov"
 #define BUF_LEN 80
 #define PROCFS_MAX_SIZE 2048
 #define PROCFS_NAME     "rtcromanov"
-
-static int Major;
-static int Device_Open = 0;
-static char msg[BUF_LEN];
-static char *msg_Ptr;
 
 struct proc_dir_entry *proc_file;
 static char procfs_buffer[PROCFS_MAX_SIZE];
 static unsigned long procfs_buffer_size = 0;
 
-static struct file_operations fops = {
-  .read    = device_read,
-  .write   = device_write,
-  .open    = device_open,
-  .release = device_release
+static struct platform_device *rtc_romanov_platform_device;
+
+static struct platform_driver rtc_romanov_platform_driver = {
+  .driver  = {
+    .name  = DEVICE_NAME,
+    .owner = THIS_MODULE, 
+  },
+  .probe   = rtc_romanov_probe, 
 };
 
 static struct file_operations proc_fops = {
@@ -93,14 +92,30 @@ static struct file_operations proc_fops = {
   .release = single_release
 };
 
+static struct rtc_class_ops rtc_ops = {
+  .read_time = read_rtc_time,
+  .set_time = set_rtc_time,
+};
+
 struct task_struct *task;
+
+void rtc_romanov_exit(void)
+{
+  remove_proc_entry(PROCFS_NAME, NULL);
+  platform_driver_unregister(&rtc_romanov_platform_driver);
+
+  kthread_stop(task);
+  printk(KERN_ALERT "RTC_Romanov module was removed.\n");
+}
 
 static int rtc_romanov_init(void)
 {
+  int err;
   struct timeval* tv;
+
   tv = kmalloc(sizeof(struct timeval), GFP_KERNEL);
   do_gettimeofday(tv);
-
+  
   /*Init time parameters, which store seconds and useconds*/
   init_time = tv->tv_sec;
   time_sec = tv->tv_sec;
@@ -109,14 +124,21 @@ static int rtc_romanov_init(void)
   task = kthread_run(main_thread, &tv, "main loop");
   wake_up_process(task);
 
-  /* Register chrdev*/
-  Major = register_chrdev(0, DEVICE_NAME, &fops);
+  /* platform device */
+  err = platform_driver_register(&rtc_romanov_platform_driver);
+  if(err)
+    return err;
 
-  if(Major < 0) {
-    printk(KERN_ALERT "Registering chardevice failed with %d\n", Major); 
-    goto fail_dev;
+  rtc_romanov_platform_device = platform_device_alloc(DEVICE_NAME, 0);
+  if(rtc_romanov_platform_device == NULL){
+    err = -ENOMEM;
+    platform_driver_unregister(&rtc_romanov_platform_driver);
+    return err;
   }
-  printk(KERN_INFO "RTC_Romanov: assigned major number %d.\n", Major);
+
+  err = platform_device_add(rtc_romanov_platform_device);
+  if(err)
+    platform_device_put(rtc_romanov_platform_device);
 
   /*Register procfs*/
   proc_file = proc_create(PROCFS_NAME, 0777, NULL, &proc_fops); 
@@ -124,29 +146,24 @@ static int rtc_romanov_init(void)
     remove_proc_entry(PROCFS_NAME, NULL);
     printk(KERN_ALERT "Error: could not initialize /proc/%s\n",
           PROCFS_NAME);
-    goto fail_proc;
+    return -ENOMEM;
   }
 
   printk(KERN_INFO "/proc/%s created\n", PROCFS_NAME);
   return SUCCESS;
 
-fail_dev:
-  rtc_romanov_exit();
-  return Major;
-fail_proc:
-  rtc_romanov_exit();
-  return -ENOMEM;
-  
 }
 
-void rtc_romanov_exit(void)
+static int rtc_romanov_probe(struct platform_device *pdev)
 {
-  unregister_chrdev(Major, DEVICE_NAME);
-  remove_proc_entry(PROCFS_NAME, NULL);
-
-  kthread_stop(task);
-  printk(KERN_ALERT "RTC_Romanov module was removed.\n");
+  struct rtc_device *rtc;
+  rtc = devm_rtc_device_register(&pdev->dev, DEVICE_NAME, &rtc_ops, THIS_MODULE);
+  if(IS_ERR(rtc))
+    return PTR_ERR(rtc);
+  platform_set_drvdata(pdev, rtc);
+  return SUCCESS;
 }
+
 
 static int main_thread(void* data)
 {
@@ -176,52 +193,6 @@ static int main_thread(void* data)
     }
   }
     return 0;
-}
-
-static int device_open(struct inode *inode, struct file *file)
-{
-  if(Device_Open)
-    return -EBUSY;
-  Device_Open++;
-  sprintf(msg, "Seconds: %ld; Useconds: %d.\n",
-      time_sec, time_usec);
-  msg_Ptr = msg;
-  try_module_get(THIS_MODULE);
-
-  return SUCCESS;
-}
-
-static int device_release(struct inode *inode, struct file *file)
-{
-  Device_Open--;
-  module_put(THIS_MODULE);
-  return 0;
-}
-
-static ssize_t device_read(struct file *filp,
-                           char *buffer,
-                           size_t length,
-                           loff_t * offset)
-{
-  int bytes_read = 0;
-  if(*msg_Ptr == 0)
-    return 0;
-
-  while(length && *msg_Ptr){
-    put_user(*(msg_Ptr++), buffer++);
-    length--;
-    bytes_read++;
-  }
-  return bytes_read;
-}
-
-static ssize_t device_write(struct file *filp, 
-                            const char *buffer, 
-                            size_t length, 
-                            loff_t * offset)
-{
-  printk(KERN_ALERT "Write to dev file not implementing\n on RTC Romanov module.\n");
-  return -EINVAL;
 }
 
 static int procfile_show(struct seq_file *m, void *v) 
@@ -294,6 +265,20 @@ static ssize_t procfile_write(struct file * file,
     return -EINVAL;
   }
   return procfs_buffer_size;
+}
+
+static int read_rtc_time(struct device * dev, struct rtc_time * tm)
+{
+  rtc_time_to_tm(time_sec, tm);
+  return 0;
+}
+
+static int set_rtc_time(struct device * dev, struct rtc_time * tm)
+{
+  unsigned long time;
+  rtc_tm_to_time(tm, &time);
+  time_sec = time;
+  return 0;
 }
 
 module_init(rtc_romanov_init);
